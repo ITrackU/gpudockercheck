@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  gpu:
+    build: .
+    container_name: project_gpu
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+        - .:/app
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1  # Number of GPUs to allocate
+              capabilities: [gpu]
+    command: python3 app.py
+    stdin_open: true
+    tty: true
+    restart: always
