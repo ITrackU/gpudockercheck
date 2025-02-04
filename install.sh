@@ -26,7 +26,7 @@ if ! command -v nvidia-smi &> /dev/null; then
 fi
 
 # Install NVIDIA Container Toolkit
-if ! dpkg -l | grep -q nvidia-container-toolkit; then
+if ! dnf list installed | grep -q nvidia-container-toolkit; then
     echo -e "${GREEN}Installing NVIDIA Container Toolkit...${NC}"
     distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
     curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
