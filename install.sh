@@ -9,18 +9,14 @@ echo -e "${GREEN}Starting installation process...${NC}"
 
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
-    echo -e "${RED}Docker is not installed. Installing Docker...${NC}"
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sudo sh get-docker.sh
-    sudo usermod -aG docker $USER
-    rm get-docker.sh
+    echo -e "${RED}Docker is not installed. Please install Docker...${NC}"
+    exit 1
 fi
 
 # Check if Docker Compose is installed
-if ! command -v docker-compose &> /dev/null; then
-    echo -e "${RED}Docker Compose is not installed. Installing Docker Compose...${NC}"
-    sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
+if ! command -v docker compose &> /dev/null; then
+    echo -e "${RED}Docker Compose is not installed. Please Install Docker Compose...${NC}"
+    exit 1
 fi
 
 # Check if NVIDIA drivers are installed
@@ -42,6 +38,6 @@ fi
 
 # Build and run the container
 echo -e "${GREEN}Building and starting the container...${NC}"
-docker-compose up --build -d
+docker compose up --build -d
 
 echo -e "${GREEN}Installation completed! Check the logs with: docker-compose logs${NC}"
