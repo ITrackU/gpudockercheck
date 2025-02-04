@@ -1,4 +1,4 @@
-# PyTorch GPU Application
+# Supported GPU Application test with Pytorch
 
 This application demonstrates GPU usage with PyTorch in a Docker container. It creates a random tensor and verifies GPU availability.
 
