@@ -1,79 +1,97 @@
-# Supported GPU Application test with Pytorch
+# **GPU-Accelerated AI with Docker – Complete Guide**
 
-This application demonstrates GPU usage with PyTorch in a Docker container. It creates a random tensor and verifies GPU availability.
+## **Introduction**
+This repository provides a comprehensive guide on setting up NVIDIA GPU acceleration for AI workloads using Docker. It covers the advantages of using GPUs for AI, manual installation steps for both Debian-based and RHEL 9 systems, and automated installation scripts for ease of use.
 
-## Prerequisites
+## **Why Use NVIDIA GPUs for AI?**
+- **High Performance:** Parallel processing enables faster AI model training and inference.
+- **Optimized for AI Workloads:** CUDA and cuDNN support deep learning frameworks like TensorFlow and PyTorch.
+- **Cost-Efficient:** Reduces computational time, optimizing resource usage.
 
-- NVIDIA GPU with CUDA support
-- NVIDIA drivers installed
-- Linux-based operating system (Ubuntu recommended)
+## **Why Use Docker for AI?**
+- **Portability:** Ensures AI applications run consistently across different environments.
+- **Scalability:** Easily scale workloads using Kubernetes and cloud platforms.
+- **Isolation:** Prevents dependency conflicts between different projects.
 
-## Quick Start
-
-1. Make the installation script executable and run it:
-   ```bash
-   chmod +x install.sh
-   ./install.sh
-   ```
-
-The script will:
-- Install Docker if not present
-- Install Docker Compose if not present
-- Install NVIDIA Container Toolkit
-- Build and run the container
-
-## Manual Installation
-
-If you prefer to install manually:
-
-1. Install Docker:
-   ```bash
-   curl -fsSL https://get.docker.com -o get-docker.sh
-   sudo sh get-docker.sh
-   ```
-
-2. Install NVIDIA Container Toolkit:
-   ```bash
-   distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
-   curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
-   curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
-   sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
-   ```
-
-3. Build and run:
-   ```bash
-   docker-compose up --build -d
-   ```
-
-## Project Structure
-
+## **Installation Guide**
+### **Manual Installation (Debian-Based Systems)**
+#### **1. System Preparation**
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y build-essential linux-headers-$(uname -r) pkg-config dkms curl gnupg software-properties-common apt-transport-https ca-certificates
 ```
-.
-├── app.py              # Main application file
-├── Dockerfile          # Docker configuration
-├── docker-compose.yml  # Docker Compose configuration
-├── install.sh          # Installation script
-└── README.md           # This file
+#### **2. Install NVIDIA Drivers**
+```bash
+sudo apt install -y nvidia-driver
+reboot
+```
+#### **3. Install Docker**
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+newgrp docker
+```
+#### **4. Install NVIDIA Container Toolkit**
+```bash
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://nvidia.github.io/libnvidia-container/stable/deb/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt update && sudo apt install -y nvidia-container-toolkit
+sudo systemctl restart docker
 ```
 
-## Monitoring
+### **Manual Installation (RHEL 9-Based Systems)**
+#### **1. System Preparation**
+```bash
+sudo dnf install -y epel-release
+sudo dnf config-manager --set-enabled crb
+sudo dnf install -y dkms kernel-devel-$(uname -r) kernel-headers-$(uname -r) gcc make curl
+```
+#### **2. Install NVIDIA Drivers**
+```bash
+sudo dnf install -y nvidia-driver
+reboot
+```
+#### **3. Install Docker**
+```bash
+sudo dnf install -y dnf-plugins-core
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+sudo dnf install -y docker-ce docker-ce-cli containerd.io
+dsudo systemctl enable --now docker
+sudo usermod -aG docker $USER
+newgrp docker
+```
+#### **4. Install NVIDIA Container Toolkit**
+```bash
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+echo "[nvidia-container-toolkit]\nname=NVIDIA Container Toolkit\nbaseurl=https://nvidia.github.io/libnvidia-container/stable/rpm/\$basearch\nenabled=1\ngpgcheck=1\ngpgkey=https://nvidia.github.io/libnvidia-container/gpgkey" | sudo tee /etc/yum.repos.d/nvidia-container-toolkit.repo
+sudo dnf install -y nvidia-container-toolkit
+sudo systemctl restart docker
+```
 
-- View logs: `docker-compose logs`
-- Stop application: `docker-compose down`
-- Restart application: `docker-compose restart`
+## **Using the Installation Script**
+For an automated setup, use the provided installation script:
+```bash
+chmod +x install_nvidia_docker.sh
+sudo ./install_nvidia_docker.sh
+```
 
-## Troubleshooting
+## **Validating Installation**
+After installation, check if NVIDIA GPU is available inside Docker:
+```bash
+docker run --rm --gpus all nvidia/cuda:11.0-base nvidia-smi
+```
+Expected output should display GPU details.
 
-1. If GPU is not detected:
-   - Verify NVIDIA drivers are installed: `nvidia-smi`
-   - Check Docker GPU support: `docker run --gpus all nvidia/cuda:10.2-base nvidia-smi`
+## **Advantages of This Implementation**
+- **Boosts AI Performance:** Up to 10x faster than CPU-based execution.
+- **Seamless Deployment:** Containers ensure consistency across environments.
+- **Optimized Resource Utilization:** Maximizes the use of available hardware.
 
-2. If Docker permission issues occur:
-   ```bash
-   sudo usermod -aG docker $USER
-   newgrp docker
-   ```
+## **Next Steps**
+- Deploy AI models in GPU-accelerated Docker containers.
+- Benchmark performance improvements.
+- Scale using Kubernetes and cloud services.
 
-## License
+**Let's accelerate AI development with NVIDIA GPUs and Docker!**
 
-This project is open-source and available under the MIT License.
