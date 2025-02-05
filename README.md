@@ -71,6 +71,7 @@ sudo systemctl restart docker
 
 ## **Using the Installation Script**
 For an automated setup, use the provided installation script:
+
 debian-based systems :
 ```bash
 chmod +x install_debian.sh
