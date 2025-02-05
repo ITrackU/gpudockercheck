@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # This script installs NVIDIA drivers and container toolkit on Debian-based systems.
-# Tested on Ubuntu and Debian.
+# Compatible with Debian, Ubuntu, Kali Linux, and other Debian derivatives.
 
 set -euo pipefail
 
@@ -8,18 +8,44 @@ script_name=$(basename "$0")
 prefix="[${script_name}]"
 hostname=$(hostname)
 
+# Color codes
+GREEN='\e[32m'
+BLUE='\e[34m'
+RED='\e[31m'
+NC='\e[0m' # No Color
+
 function say {
-    echo -e "\e[34m${prefix} $(date +'%H:%M:%S')\e[0m: $*"
+    echo -e "${BLUE}${prefix} $(date +'%H:%M:%S')${NC}: $*"
 }
 
 function say_error {
-    echo -e "\e[31m${prefix} $(date +'%H:%M:%S')\e[0m: $*" >&2
+    echo -e "${RED}${prefix} $(date +'%H:%M:%S')${NC}: $*" >&2
 }
 
-function pre-checks {
-    if ! grep -qiE 'debian|ubuntu' /etc/os-release; then
+function say_success {
+    echo -e "${GREEN}${prefix} $(date +'%H:%M:%S')${NC}: $*"
+}
+
+function pre_checks {
+    if ! grep -qiE 'debian|ubuntu|kali' /etc/os-release; then
         say_error "This script is only meant to run on Debian-based systems"
         exit 1
+    fi
+}
+
+function check_nvidia_installed {
+    if command -v nvidia-smi &>/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function check_container_toolkit_installed {
+    if command -v nvidia-container-toolkit &>/dev/null; then
+        return 0
+    else
+        return 1
     fi
 }
 
@@ -86,10 +112,20 @@ function check_system_requirements() {
     say "System requirements met: ${ram_gb}GB RAM, ${cpu_cores} CPU cores"
 }
 
+function ensure_docker_group {
+    if ! getent group docker >/dev/null; then
+        say "Creating 'docker' group..."
+        sudo groupadd docker
+    fi
+}
+
 function install_dependencies() {
     say "Installing required dependencies..."
-    sudo apt-get update
-    sudo apt-get install -y \
+    # Force update package lists
+    sudo apt-get update --allow-insecure-repositories || true
+    
+    # Install dependencies without recommended packages to minimize issues
+    sudo apt-get install --no-install-recommends -y \
         build-essential \
         linux-headers-$(uname -r) \
         pkg-config \
@@ -97,35 +133,46 @@ function install_dependencies() {
         curl \
         gnupg \
         software-properties-common
+
+    # Ensure apt can handle HTTPS repositories
+    sudo apt-get install --no-install-recommends -y \
+        apt-transport-https \
+        ca-certificates
 }
 
-function check-nvidia-installed {
-    nvidia-smi &>/dev/null
-}
-
-function install-nvidia-driver {
-    if check-nvidia-installed; then
+function install_nvidia_driver {
+    if check_nvidia_installed; then
         say "NVIDIA drivers are already installed; skipping..."
         return
     fi
 
     say "Installing NVIDIA drivers..."
     
-    # Add NVIDIA repository
-    curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
-        sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-        sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+    # Add non-free repositories if on Debian or Kali
+    if grep -qiE 'debian|kali' /etc/os-release; then
+        # Add contrib and non-free repositories
+        sudo sed -i 's/main/main contrib non-free non-free-firmware/g' /etc/apt/sources.list
+    fi
 
+    # Update package lists after adding repositories
     sudo apt-get update
-    
+
+    # Try to install nvidia-detect if available
+    if apt-cache show nvidia-detect >/dev/null 2>&1; then
+        sudo apt-get install -y nvidia-detect
+        RECOMMENDED_DRIVER=$(nvidia-detect | grep "nvidia-driver" | cut -d' ' -f1 || echo "nvidia-driver")
+        say "Recommended NVIDIA driver package: ${RECOMMENDED_DRIVER}"
+    else
+        RECOMMENDED_DRIVER="nvidia-driver"
+    fi
+
     # Install NVIDIA drivers
-    sudo apt-get install -y nvidia-driver-535  # You can change version number if needed
+    sudo apt-get install -y $RECOMMENDED_DRIVER
 
     say "A reboot is required to load the NVIDIA drivers."
     say "These are the users connected to the system:"
     who
-    echo -ne "\n\t\e[31mDo you want to reboot now? [y/N]\e[0m "
+    echo -ne "\n\t${RED}Reboot now to load the NVIDIA drivers? [y/N]${NC} "
     read -r answer
     echo -e "\n"
     if [[ "${answer}" =~ ^[Yy]$ ]]; then
@@ -137,33 +184,50 @@ function install-nvidia-driver {
     fi
 }
 
-function check-container-toolkit-installed {
-    nvidia-container-toolkit --version &>/dev/null
-}
-
-function install-container-toolkit {
-    if check-container-toolkit-installed; then
+function install_container_toolkit {
+    if check_container_toolkit_installed; then
         say "Container toolkit is already installed; skipping..."
         return
     fi
     
     say "Installing container toolkit..."
-    # Install Docker if not present
+    
+    # Install Docker using the official script with fallback options
     if ! command -v docker &>/dev/null; then
         say "Installing Docker..."
-        curl -fsSL https://get.docker.com | sh
-        sudo usermod -aG docker $USER
+        if ! curl -fsSL https://get.docker.com | sh; then
+            say_error "Docker installation script failed, trying alternative method..."
+            # Fallback method for Docker installation
+            sudo apt-get install -y docker.io containerd
+        fi
+        ensure_docker_group
+		sudo usermod -aG docker $USER
         say "Added current user to docker group. You may need to log out and back in."
     fi
 
-    # Install NVIDIA Container Toolkit
+    # Add NVIDIA Container Toolkit repository
+    curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+
+    # Detect distribution for repository configuration
+    distribution=$(. /etc/os-release;echo $ID$VERSION_ID || echo "debian10")
+    
+    # Handle Kali Linux specifically
+    if [[ "$distribution" == "kali"* ]]; then
+        distribution="debian11"
+    fi
+
+    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+        sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+        sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+    sudo apt-get update
     sudo apt-get install -y nvidia-container-toolkit
 }
 
 function check_running_containers() {
     if ! command -v docker &>/dev/null; then
         return
-    }
+    fi
     
     local running_containers=$(docker ps -q | wc -l)
     
@@ -181,7 +245,7 @@ function check_running_containers() {
     fi
 }
 
-function configure-container-toolkit {
+function configure_container_toolkit {
     say "Configuring container toolkit..."
     sudo nvidia-ctk runtime configure --runtime=docker
     
@@ -191,7 +255,7 @@ function configure-container-toolkit {
     sudo systemctl restart docker
 }
 
-function show-nvidia-info {
+function show_nvidia_info {
     say "NVIDIA driver info:"
     nvidia-smi --query-gpu=gpu_name,driver_version,temperature.gpu,power.draw,memory.used,memory.total --format=csv | column -t -s ,
     say "Container toolkit info:"
@@ -243,7 +307,7 @@ function cleanup() {
 
 function main {
     say "Starting ${script_name} on ${hostname}..."
-    pre-checks
+    pre_checks
     sudo -v -p "[sudo] I need root access to install packages: "
     
     check_nvidia_gpu_presence
@@ -252,12 +316,12 @@ function main {
     backup_existing_config
     
     install_dependencies
-    install-nvidia-driver
-    install-container-toolkit
-    configure-container-toolkit
+    install_nvidia_driver
+    install_container_toolkit
+    configure_container_toolkit
     
-    show-nvidia-info
-    say "Finished ${script_name} on ${hostname}!"
+    show_nvidia_info
+    say_success "Finished ${script_name} on ${hostname}!"
 }
 
 trap cleanup EXIT
