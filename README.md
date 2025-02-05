@@ -71,9 +71,16 @@ sudo systemctl restart docker
 
 ## **Using the Installation Script**
 For an automated setup, use the provided installation script:
+debian-based systems :
 ```bash
-chmod +x install_nvidia_docker.sh
-sudo ./install_nvidia_docker.sh
+chmod +x install_debian.sh
+sudo ./install_debian.sh
+```
+
+RHEL Based systems :
+```bash
+chmod +x install_rhel.sh
+sudo ./install_rhel.sh
 ```
 
 ## **Validating Installation**
